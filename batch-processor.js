@@ -11,10 +11,10 @@ let loadData = async (bucket, key) => {
   try {
     console.log('Loading data from S3', { bucket, key });
 
-    let req = { 
-      Bucket: bucket, 
-      Key: key, 
-      IfNoneMatch: _.get(cached, 'etag') 
+    let req = {
+      Bucket: bucket,
+      Key: key,
+      IfNoneMatch: _.get(cached, 'etag')
     };
     let resp = await s3.getObject(req).promise();
 
@@ -55,6 +55,7 @@ module.exports.handler = async (event, context) => {
   let data     = await loadData(bucket, key);
 
   let totalTaskCount = data.tasks.length;
+  console.log(`Starting position ${position} of ${totalTaskCount}`);
   let batchSize      = process.env.BATCH_SIZE || 5;
 
   try {
@@ -62,17 +63,20 @@ module.exports.handler = async (event, context) => {
       console.log('Processing next batch...');
       let batch = data.tasks.slice(position, position + batchSize);
       position = position + batch.length;
-      
+
       for (let task of batch) {
         await Promise.delay(1000); // each task takes a second to process
       }
-    } while (position < totalTaskCount && 
+      console.log(`RemainingTimeInMillis ${context.getRemainingTimeInMillis()}`);
+    } while (position < totalTaskCount &&
             context.getRemainingTimeInMillis() > 10000);
 
     if (position < totalTaskCount) {
       let newEvent = Object.assign(event, { position });
       await recurse(newEvent);
-      return `to be continued...[${position}]`;
+      const msg = `to be continued...[${position}]`
+      console.log(msg)
+      return msg;
     } else {
       return "all done";
     }
